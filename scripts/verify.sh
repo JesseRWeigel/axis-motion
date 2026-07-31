@@ -49,7 +49,8 @@ for n in names:
     for label, rx in patterns:
         for m in rx.finditer(data):
             bad.append(f'{n}: {label}: {m.group(0)[:24]!r}')
-print(f'scanned {len(names)} tracked files, {sum(os.path.getsize(os.path.join(root,n)) for n in names if os.path.isfile(os.path.join(root,n)))} bytes')
+total = sum(os.path.getsize(os.path.join(root,n)) for n in names if os.path.isfile(os.path.join(root,n)))
+print(f'scanned {len(names)} tracked files, {round(total/1024)} KB')
 if nul:
     print('files containing a NUL byte, which would blind a grep based scan:')
     for n in nul:
@@ -81,7 +82,7 @@ for n in names:
         big.append((n, size))
     if os.path.splitext(n)[1].lower() in {'.ttf', '.otf', '.woff', '.woff2', '.mp4', '.webm', '.mov', '.png', '.jpg', '.gif'}:
         banned.append(n)
-print(f'{len(names)} tracked files, {total} bytes total')
+print(f'{len(names)} tracked files, {round(total/1024)} KB total')
 if banned:
     print('font or media files are committed, which this project forbids:')
     for n in banned:

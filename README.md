@@ -209,21 +209,23 @@ ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
 repo: ~/Projects/thousand/projects/axis-motion
 
 == no secrets and no home directory paths in tracked files
-scanned 26 tracked files, 118914 bytes
+scanned 32 tracked files, 178603 bytes
 no credential shaped strings, no /home/<user>/ paths, no NUL bytes
 
 == nothing large and nothing binary is committed
-26 tracked files, 118914 bytes total
+32 tracked files, 178603 bytes total
 largest tracked file: docs/index.html
 
 == the axis inventory this machine really has
-UbuntuSansMono-Italic[wght].ttf
-    Ubuntu Sans Mono  wght[400..700] def 400
-UbuntuSansMono[wght].ttf
-    Ubuntu Sans Mono  wght[100..700] def 400
-UbuntuSans[wdth,wght].ttf
+/usr/share/fonts/truetype/ubuntu/UbuntuSans-Italic[wdth,wght].ttf
     Ubuntu Sans  wdth[75..100] def 100  wght[100..800] def 400
-Ubuntu[wdth,wght].ttf
+/usr/share/fonts/truetype/ubuntu/UbuntuSansMono-Italic[wght].ttf
+    Ubuntu Sans Mono  wght[400..700] def 400
+/usr/share/fonts/truetype/ubuntu/UbuntuSansMono[wght].ttf
+    Ubuntu Sans Mono  wght[100..700] def 400
+/usr/share/fonts/truetype/ubuntu/UbuntuSans[wdth,wght].ttf
+    Ubuntu Sans  wdth[75..100] def 100  wght[100..800] def 400
+/usr/share/fonts/truetype/ubuntu/Ubuntu[wdth,wght].ttf
     Ubuntu  wdth[75..100] def 100  wght[100..800] def 400
     6 symlinks point here: Ubuntu-B.ttf, Ubuntu-C.ttf, Ubuntu-L.ttf, Ubuntu-M.ttf, Ubuntu-R.ttf, Ubuntu-Th.ttf
 22 paths with fvar, 8 distinct files, 95 static, 0 unreadable
@@ -241,10 +243,8 @@ exit codes: unknown axis 1, out of range 1, syntax error 1, valid timeline 0
 docs/index.html matches a fresh build
 
 == test suite
-[... 70 unit tests trimmed ...]
 ▶ browser checks
   ✔ the server serves this project, checked by content not status
-  ✔ WAAPI export: computed font-variation-settings matches the timeline
     browser-read fontVariationSettings vs timeline
       t=   0ms  read [100, 100, 100]  expected [100, 100, 100]
       t= 200ms  read [240, 100, 100]  expected [240, 100, 100]
@@ -253,6 +253,7 @@ docs/index.html matches a fresh build
       t=1000ms  read [800, 660, 520]  expected [800, 660, 520]
       t=1200ms  read [800, 800, 660]  expected [800, 800, 660]
       t=1400ms  read [800, 800, 800]  expected [800, 800, 800]
+  ✔ WAAPI export: computed font-variation-settings matches the timeline
   ✔ the harness really loaded the variable font, measured not assumed
   ✔ the WAAPI JSON in the docs page drives real animations
   ✔ the docs page axis table matches a fresh scan of this machine
@@ -260,6 +261,8 @@ docs/index.html matches a fresh build
   ✔ light and dark both render, and data-theme overrides both ways
   ✔ prefers-reduced-motion: no autoplay, and the play control still works
   ✔ the docs page requests nothing from the network
+✔ browser checks
+[... 70 further tests, all passing, trimmed for length ...]
 ℹ tests 79
 ℹ pass 79
 ℹ fail 0
@@ -281,17 +284,49 @@ applied, and in each case the sabotaged output was inspected with the naked eye 
 conclusion.
 
 **Sabotage 1, the `fvar` parser returns a hardcoded `wght` axis for every font.** `readFvar` was
-edited to ignore the table directory and return `[{tag:'wght', min:100, default:400, max:900}]`
-unconditionally. Confirmed observable first: `node bin/axis-motion.js axes` on `DejaVuSans.ttf`,
-a font with no `fvar` at all, then reported a weight axis. Verify exit code **1**, with 14 test
-failures including the exact-bounds check, both negative controls, the custom-axis synthetic
-font, and the docs page table comparison.
+edited to return `[{tag:'wght', min:100, default:400, max:900}]` unconditionally before it ever
+looks at the table directory.
+
+Confirmed observable before anything else:
+
+```
+$ node bin/axis-motion.js axes /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+family: DejaVu Sans
+  wght  min 100  default 400  max 900  name Weight
+```
+
+`DejaVuSans.ttf` has no `fvar` table at all, so that output is the sabotage working.
+
+**Verify exit code 1.** It stopped inside the refusal section, reporting
+`exit codes: unknown axis 1, out of range 0, syntax error 1, valid timeline 1`, with
+`FAIL: a case that must be refused did not exit 1` and `FAIL: a valid timeline did not compile`,
+then died on `tools/build-docs.js` which could no longer find the `wdth` axis. Running the test
+suite by itself under the same sabotage: **79 tests, 57 pass, 22 fail**, including the exact
+bounds check on Ubuntu Sans, both negative controls, the custom-axis synthetic font, every
+determinism test, and the browser check that compares the docs page table against a live scan.
 
 **Sabotage 2, the range check always passes.** `checkAxisValue` was edited to return the axis
-without comparing against `min` and `max`. Confirmed observable first:
-`node bin/axis-motion.js css examples/out-of-range.tl` then emitted
-`font-variation-settings: "wght" 900` for a font whose declared maximum is 800. Verify exit code
-**1**, with 5 test failures, and the refusal section reporting `out of range 0`.
+without comparing the value against `min` and `max`.
+
+Confirmed observable before anything else:
+
+```
+$ node bin/axis-motion.js css examples/out-of-range.tl
+@keyframes axis-motion {
+  0% { font-variation-settings: "wght" 400; ... }
+  100% { font-variation-settings: "wght" 900; ... }
+}
+```
+
+That is CSS asking for weight 900 from a font whose declared maximum is 800, which is exactly the
+silent clamp this project exists to prevent.
+
+**Verify exit code 1.** The refusal section reported
+`exit codes: unknown axis 1, out of range 0, syntax error 1, valid timeline 0` and
+`FAIL: a case that must be refused did not exit 1`, then the docs check reported
+`docs/index.html is out of date` because the refusal message quoted on that page had vanished.
+Running the test suite by itself under the same sabotage: **79 tests, 74 pass, 5 fail**, all five
+in the refusal file.
 
 Both sabotages were reverted with `git checkout`, and verify returns to exit 0.
 
