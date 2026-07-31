@@ -25,22 +25,34 @@ const { renderPage } = require('./render-page');
 
 // playwright-core is not a dependency of this project. It is borrowed from a
 // sibling project in the same workspace, or pointed at with an env var.
-// No absolute home directory path is committed.
-const PLAYWRIGHT =
-  process.env.AXIS_MOTION_PLAYWRIGHT ||
-  path.resolve(__dirname, '..', '..', 'a11y-sweep', 'node_modules', 'playwright-core');
+// No absolute home directory path is committed, and no single hardcoded path either: resolving
+// only a SIBLING project's node_modules worked in the directory this was written in and failed
+// in every fresh clone. PLAYWRIGHT_CORE is honoured alongside the project-specific name because
+// every other project in this catalog uses that one.
+const CANDIDATES = [
+  process.env.AXIS_MOTION_PLAYWRIGHT,
+  process.env.PLAYWRIGHT_CORE,
+  path.resolve(__dirname, '..', 'node_modules', 'playwright-core'),
+  'playwright-core',
+  'playwright',
+  path.resolve(__dirname, '..', '..', 'a11y-sweep', 'node_modules', 'playwright-core'),
+].filter(Boolean);
 
 function loadChromium() {
-  let pw;
-  try {
-    pw = require(PLAYWRIGHT);
-  } catch (err) {
-    throw new Error(
-      `video export needs playwright-core. Tried ${PLAYWRIGHT}. ` +
-        `Set AXIS_MOTION_PLAYWRIGHT to override. Underlying error: ${err.message}`
-    );
+  const tried = [];
+  for (const c of CANDIDATES) {
+    try {
+      return require(c).chromium;
+    } catch (err) {
+      tried.push(c);
+    }
   }
-  return pw.chromium;
+  throw new Error(
+    'video export needs playwright-core and none was found.\n'
+    + 'To install:  npm install --no-save playwright-core && npx playwright install chromium\n'
+    + 'Or point at an existing install with PLAYWRIGHT_CORE=/path/to/playwright-core\n'
+    + `Tried: ${tried.join(', ')}`
+  );
 }
 
 function run(cmd, args, opts = {}) {

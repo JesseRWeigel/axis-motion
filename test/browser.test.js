@@ -30,18 +30,35 @@ const { emitWaapi } = require('../src/emit-waapi');
 const { renderPage } = require('../src/render-page');
 
 const ROOT = path.resolve(__dirname, '..');
-const PLAYWRIGHT =
-  process.env.AXIS_MOTION_PLAYWRIGHT ||
-  path.resolve(ROOT, '..', 'a11y-sweep', 'node_modules', 'playwright-core');
+// Ordinary places first. Resolving only a SIBLING project works in the directory it was written
+// in and nowhere else. PLAYWRIGHT_CORE is honoured as well as the project-specific name, because
+// every other project in this catalog uses that one and a reader should not have to guess.
+//
+// Note how this fails when nothing is found: the throw is at module scope, so the FILE does not
+// load and its 11 tests never register. The suite then reports 68 passing with zero failures,
+// which is the silent-skip problem at file granularity. The count assertion in verify.sh is what
+// catches it, and is the reason that assertion exists.
+const CANDIDATES = [
+  process.env.AXIS_MOTION_PLAYWRIGHT,
+  process.env.PLAYWRIGHT_CORE,
+  path.resolve(ROOT, 'node_modules', 'playwright-core'),
+  'playwright-core',
+  'playwright',
+  path.resolve(ROOT, '..', 'a11y-sweep', 'node_modules', 'playwright-core'),
+].filter(Boolean);
 
 let chromium;
-try {
-  chromium = require(PLAYWRIGHT).chromium;
-} catch (err) {
-  // A missing browser is "could not verify", never "verified". Fail loudly.
+let tried = [];
+for (const c of CANDIDATES) {
+  try { chromium = require(c).chromium; break; } catch (e) { tried.push(c); }
+}
+if (!chromium) {
+  // A missing browser is "could not verify", never "verified". Fail loudly and usefully.
   throw new Error(
-    `browser tests need playwright-core at ${PLAYWRIGHT}. ` +
-      `Set AXIS_MOTION_PLAYWRIGHT to point elsewhere. ${err.message}`
+    'browser tests need playwright-core and none was found.\n'
+    + 'To run them:  npm install --no-save playwright-core && npx playwright install chromium\n'
+    + 'Or point at an existing install with PLAYWRIGHT_CORE=/path/to/playwright-core\n'
+    + `Tried: ${tried.join(', ')}`
   );
 }
 
