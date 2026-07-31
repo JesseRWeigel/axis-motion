@@ -26,7 +26,10 @@ function renderPage(plan, opts = {}) {
     ...opts,
   };
   const waapi = emitWaapi(plan);
-  const fontUrl = 'file://' + plan.font.file.split('/').map(encodeURIComponent).join('/');
+  // A page served over http cannot load a file:// font, so callers that serve
+  // the page must also serve the font and pass its URL here.
+  const fontUrl =
+    o.fontUrl || 'file://' + plan.font.file.split('/').map(encodeURIComponent).join('/');
   const glyphs = plan.glyphs
     .map((ch) => `<span class="glyph">${ch === ' ' ? '&nbsp;' : escapeHtml(ch)}</span>`)
     .join('');
