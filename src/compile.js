@@ -144,7 +144,9 @@ function compile(timeline, opts = {}) {
 
 /**
  * Sample the plan at an absolute time, for one glyph index.
- * Returns { tag: value } or null when the glyph has not started.
+ * Returns { tag: value }. Before the glyph's delay elapses it holds the first
+ * keyframe, and after its animation ends it holds the last, which is what
+ * animation-fill-mode: both does.
  * Independent of any export format, so exports can be checked against it.
  */
 function sample(plan, glyphIndex, timeMs) {

@@ -230,23 +230,34 @@ test('browser checks', { concurrency: 1 }, async (t) => {
       await page.close();
     });
 
-    await t.test('the WAAPI JSON in the docs page drives real animations', async () => {
+    await t.test('the docs page animates for real, and its font report is true', async () => {
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
       await page.goto(`${base}/index.html`);
       await page.waitForFunction('window.axisMotionReady === true');
       const r = await page.evaluate(() => {
         if (document.title !== 'axis-motion') throw new Error('wrong page: ' + document.title);
         const glyphs = document.querySelectorAll('#stage > .glyph');
-        window.axisMotionSeek(600);
-        const mid = getComputedStyle(glyphs[0]).fontVariationSettings;
+        const read = (t) => {
+          window.axisMotionSeek(t);
+          const cs = getComputedStyle(glyphs[0]);
+          return {
+            fvs: cs.fontVariationSettings,
+            weight: cs.fontWeight,
+            stretch: cs.fontStretch,
+            width: glyphs[0].getBoundingClientRect().width,
+          };
+        };
+        const start = read(0);
+        const mid = read(600);
         window.axisMotionSeek(0);
-        const start = getComputedStyle(glyphs[0]).fontVariationSettings;
         return {
           title: document.title,
           glyphCount: glyphs.length,
           animations: (window.axisMotionAnimations || []).length,
-          mid,
+          mode: window.axisMotionMode,
+          report: window.axisMotionFontReport,
           start,
+          mid,
           text: document.getElementById('stage').textContent,
           statusText: document.getElementById('font-status').textContent,
         };
@@ -257,15 +268,60 @@ test('browser checks', { concurrency: 1 }, async (t) => {
       assert.equal(r.glyphCount, 11, 'expected one span per glyph of "Axis Motion"');
       assert.equal(r.animations, 11);
       assert.equal(r.text, 'Axis Motion');
-      assert.notEqual(r.mid, r.start, 'the animation should change values over time');
-      assert.ok(
-        /"wght" \d/.test(r.mid),
-        `expected a wght in the computed value, got ${r.mid}`
-      );
       assert.ok(r.statusText.length > 40, 'the font status line should have been filled in');
       assert.ok(
         !/Checking whether/.test(r.statusText),
         'the font status line still shows its placeholder'
+      );
+
+      // The page picks one of three modes by measuring. Whichever it picked
+      // has to agree with the measurements it recorded, and the two motion
+      // modes have to produce visible motion.
+      assert.ok(
+        ['font-variation-settings', 'font-weight', 'static'].includes(r.mode),
+        `unexpected mode ${r.mode}`
+      );
+      const fvsWorks = r.report.fvsWght || r.report.fvsWdth;
+      const cssWorks = r.report.cssWght || r.report.cssWdth;
+      if (r.mode === 'font-variation-settings') {
+        assert.ok(fvsWorks, 'claimed font-variation-settings mode without measuring it working');
+        assert.notEqual(r.start.fvs, r.mid.fvs, 'the animation should change values over time');
+        assert.match(r.mid.fvs, /"wght" \d/);
+      } else if (r.mode === 'font-weight') {
+        assert.equal(fvsWorks, false, 'fell back while font-variation-settings actually worked');
+        assert.ok(cssWorks, 'claimed the css properties work without measuring it');
+        assert.notEqual(r.start.weight, r.mid.weight, 'font-weight should change over time');
+        assert.ok(
+          Math.abs(r.start.width - r.mid.width) > 0.5,
+          `the glyph should visibly change, measured ${r.start.width} then ${r.mid.width}`
+        );
+        assert.ok(
+          r.statusText.includes('ignores'),
+          'the page should say plainly that font-variation-settings is being ignored'
+        );
+      } else {
+        assert.equal(fvsWorks, false);
+        assert.equal(cssWorks, false);
+        assert.ok(
+          r.statusText.includes('not') && r.statusText.includes('moving'),
+          'a static page must say so'
+        );
+      }
+      // The report is a measurement, so its raw widths must back it up.
+      assert.equal(
+        Math.abs(r.report.widths.fvs[0] - r.report.widths.fvs[1]) > 0.5,
+        !!r.report.fvsWght,
+        'the fvs weight verdict disagrees with the widths it was derived from'
+      );
+      assert.equal(
+        Math.abs(r.report.widths.css[0] - r.report.widths.css[1]) > 0.5,
+        !!r.report.cssWght,
+        'the css weight verdict disagrees with the widths it was derived from'
+      );
+      process.stdout.write(
+        `    docs page animation mode on this Chromium: ${r.mode}\n` +
+          `      font-variation-settings widths ${JSON.stringify(r.report.widths.fvs)}\n` +
+          `      font-weight/stretch widths     ${JSON.stringify(r.report.widths.css)}\n`
       );
       await page.close();
     });

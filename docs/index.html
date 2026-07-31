@@ -337,17 +337,49 @@ bash scripts/verify.sh</code></pre>
     nodes.push(span);
   }
 
-  // One WAAPI animation per glyph, straight from the exported spec.
   var anims = [];
-  for (var j = 0; j < data.animations.length; j++) {
-    var spec = data.animations[j];
-    var a = nodes[spec.index].animate(spec.keyframes, spec.options);
-    a.pause();
-    a.currentTime = 0;
-    anims.push(a);
-  }
   window.axisMotionAnimations = anims;
   window.axisMotionTotal = data.totalDuration;
+
+  function parseFvs(str) {
+    var out = {};
+    var parts = str.split(',');
+    for (var i = 0; i < parts.length; i++) {
+      var m = /^\s*"([^"]{4})"\s+(-?[\d.]+)\s*$/.exec(parts[i]);
+      if (m) out[m[1]] = Number(m[2]);
+    }
+    return out;
+  }
+
+  // The same keyframes expressed through the high level CSS properties.
+  // Used when the browser resolves a variable font but does not apply
+  // font-variation-settings to it, which is what Chromium on Linux does for
+  // fonts that come from fontconfig rather than from an @font-face rule.
+  function highLevelKeyframes(kfs) {
+    var out = [];
+    for (var i = 0; i < kfs.length; i++) {
+      var v = parseFvs(kfs[i].fontVariationSettings);
+      var k = { offset: kfs[i].offset, easing: kfs[i].easing };
+      if ('wght' in v) k.fontWeight = String(v.wght);
+      if ('wdth' in v) k.fontStretch = v.wdth + '%';
+      out.push(k);
+    }
+    return out;
+  }
+
+  function buildAnimations(useHighLevel) {
+    for (var k = 0; k < anims.length; k++) anims[k].cancel();
+    anims.length = 0;
+    for (var j = 0; j < data.animations.length; j++) {
+      var spec = data.animations[j];
+      var frames = useHighLevel ? highLevelKeyframes(spec.keyframes) : spec.keyframes;
+      var a = nodes[spec.index].animate(frames, spec.options);
+      a.pause();
+      a.currentTime = 0;
+      anims.push(a);
+    }
+  }
+  buildAnimations(false);
 
   function seek(t) {
     for (var k = 0; k < anims.length; k++) anims[k].currentTime = t;
@@ -400,10 +432,14 @@ bash scripts/verify.sh</code></pre>
     if (e.matches) pause();
   });
 
-  // Honest font report: measure, do not assume. If the rendered font has a
-  // weight axis, the same string at wght 100 and wght 700 has different
-  // widths. font-variation-settings never triggers synthetic bolding, so a
-  // static fallback gives identical widths.
+  // Honest font report: measure, do not assume.
+  //
+  // Two independent probes, because they can disagree and on Chromium under
+  // Linux they routinely do.
+  //   fvs:  does font-variation-settings change the rendered width?
+  //   css:  does font-weight or font-stretch change it?
+  // Neither property triggers synthetic bolding at these values, so a static
+  // font gives identical widths for both.
   function detect() {
     var probe = document.createElement('span');
     probe.textContent = data.text;
@@ -411,39 +447,71 @@ bash scripts/verify.sh</code></pre>
       'position:absolute;left:-9999px;top:0;white-space:pre;font-size:64px;' +
       'font-family:' + getComputedStyle(stage).fontFamily;
     document.body.appendChild(probe);
+    function w() { return probe.getBoundingClientRect().width; }
+
     probe.style.fontVariationSettings = '"wght" 100';
-    var thin = probe.getBoundingClientRect().width;
+    var fvsThin = w();
     probe.style.fontVariationSettings = '"wght" 700';
-    var thick = probe.getBoundingClientRect().width;
-    probe.style.fontVariationSettings = '"wdth" 75';
-    var narrow = probe.getBoundingClientRect().width;
+    var fvsThick = w();
     probe.style.fontVariationSettings = '"wdth" 100';
-    var full = probe.getBoundingClientRect().width;
+    var fvsFull = w();
+    probe.style.fontVariationSettings = '"wdth" 75';
+    var fvsNarrow = w();
+    probe.style.fontVariationSettings = 'normal';
+
+    probe.style.fontWeight = '100';
+    var cssThin = w();
+    probe.style.fontWeight = '700';
+    var cssThick = w();
+    probe.style.fontWeight = '400';
+    probe.style.fontStretch = '100%';
+    var cssFull = w();
+    probe.style.fontStretch = '75%';
+    var cssNarrow = w();
+
     document.body.removeChild(probe);
     return {
-      wght: Math.abs(thick - thin) > 0.5,
-      wdth: Math.abs(full - narrow) > 0.5,
-      widths: [thin, thick, narrow, full]
+      fvsWght: Math.abs(fvsThick - fvsThin) > 0.5,
+      fvsWdth: Math.abs(fvsFull - fvsNarrow) > 0.5,
+      cssWght: Math.abs(cssThick - cssThin) > 0.5,
+      cssWdth: Math.abs(cssFull - cssNarrow) > 0.5,
+      widths: {
+        fvs: [fvsThin, fvsThick, fvsNarrow, fvsFull],
+        css: [cssThin, cssThick, cssNarrow, cssFull]
+      }
     };
   }
 
   function report() {
     var d = detect();
     window.axisMotionFontReport = d;
-    var have = [];
-    if (d.wght) have.push('weight');
-    if (d.wdth) have.push('width');
-    if (have.length === 2) {
-      status.innerHTML = '<span class="yes">Your browser resolved a variable font with a weight ' +
-        'and a width axis for this text.</span> The preview above is really varying both.';
-    } else if (have.length === 1) {
-      status.innerHTML = '<span class="yes">Your browser resolved a variable font with a ' +
-        have[0] + ' axis</span> and no ' + (d.wght ? 'width' : 'weight') +
-        ' axis, so only that one axis moves here.';
+    var fvs = d.fvsWght || d.fvsWdth;
+    var css = d.cssWght || d.cssWdth;
+
+    if (fvs) {
+      window.axisMotionMode = 'font-variation-settings';
+      status.innerHTML = '<span class="yes">Measured: your browser applies ' +
+        '<code>font-variation-settings</code> to the font it chose for this text.</span> ' +
+        'The preview is running the exported Web Animations object exactly as a build tool ' +
+        'would emit it.';
+    } else if (css) {
+      window.axisMotionMode = 'font-weight';
+      buildAnimations(true);
+      seek(Number(scrub.value));
+      status.innerHTML = '<span class="yes">Measured: your browser has a variable font here, ' +
+        'but ignores <code>font-variation-settings</code> on it.</span> ' +
+        'That is what Chromium on Linux does for fonts resolved through fontconfig rather than ' +
+        'loaded by an <code>@font-face</code> rule; the axes still move through ' +
+        '<code>font-weight</code> and <code>font-stretch</code>. The preview has been rebuilt on ' +
+        'those two properties from the same timeline, so the motion is real and the values are ' +
+        'the same. The exported CSS and Web Animations objects still use ' +
+        '<code>font-variation-settings</code>, which is correct for a font you ship yourself.';
     } else {
-      status.textContent = 'Measured: the font your browser chose for this text has no variation ' +
-        'axes, so the preview above is not moving. Nothing is broken and no font was loaded ' +
-        'behind your back. Install Ubuntu Sans, or any variable font, to see it animate.';
+      window.axisMotionMode = 'static';
+      status.textContent = 'Measured: the font your browser chose for this text does not respond ' +
+        'to font-variation-settings, font-weight or font-stretch, so the preview above is not ' +
+        'moving. Nothing is broken and no font was loaded behind your back. Install Ubuntu Sans, ' +
+        'or any variable font, to see it animate.';
     }
     window.axisMotionReady = true;
   }

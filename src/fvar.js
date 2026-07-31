@@ -16,8 +16,7 @@ class FontError extends Error {
   }
 }
 
-const F2DOT14 = 16384; // 2.14 fixed point
-const FIXED = 65536;   // 16.16 fixed point
+const FIXED = 65536; // 16.16 fixed point, the format fvar uses for axis bounds
 
 function readFixed(buf, off) {
   return buf.readInt32BE(off) / FIXED;
@@ -181,4 +180,4 @@ function findAxis(font, tag) {
   return font.axes.find((a) => a.tag === tag);
 }
 
-module.exports = { readFvar, findAxis, FontError, F2DOT14, FIXED };
+module.exports = { readFvar, findAxis, FontError, FIXED };

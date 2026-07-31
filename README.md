@@ -209,11 +209,11 @@ ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
 repo: ~/Projects/thousand/projects/axis-motion
 
 == no secrets and no home directory paths in tracked files
-scanned 32 tracked files, 178603 bytes
+scanned 32 tracked files, 186 KB
 no credential shaped strings, no /home/<user>/ paths, no NUL bytes
 
 == nothing large and nothing binary is committed
-32 tracked files, 178603 bytes total
+32 tracked files, 186 KB total
 largest tracked file: docs/index.html
 
 == the axis inventory this machine really has
@@ -255,7 +255,10 @@ docs/index.html matches a fresh build
       t=1400ms  read [800, 800, 800]  expected [800, 800, 800]
   ✔ WAAPI export: computed font-variation-settings matches the timeline
   ✔ the harness really loaded the variable font, measured not assumed
-  ✔ the WAAPI JSON in the docs page drives real animations
+    docs page animation mode on this Chromium: font-weight
+      font-variation-settings widths [341.3125,341.3125,341.3125,341.3125]
+      font-weight/stretch widths     [327.75,361.296875,270.21875,341.3125]
+  ✔ the docs page animates for real, and its font report is true
   ✔ the docs page axis table matches a fresh scan of this machine
   ✔ no horizontal body overflow at 390px
   ✔ light and dark both render, and data-theme overrides both ways
@@ -349,17 +352,38 @@ The demo render, `node bin/axis-motion.js video examples/wide-to-narrow.tl -o ou
 produces 55 frames at 30 fps, 960x320, 1800ms, **51990 bytes**. It is written to `out/`, which is
 gitignored, and it is not committed. Neither are any fonts: verify fails if a `.ttf`, `.mp4`,
 `.png` or similar ever appears in the tracked file list, and the whole tracked repository is
-around 119 KB.
+under 200 KB.
 
 **`docs/index.html` embeds no font, and says so on the page.** A whole variable font here would be
 1.08 MB for `UbuntuSans[wdth,wght].ttf` alone, and a subset small enough to inline would still be
 a font committed to a repository whose rule is not to commit fonts. So the page uses a system font
-stack and then measures what the visitor's browser actually resolved, by comparing the rendered
-width of the same string at `wght 100` against `wght 700`. `font-variation-settings` never
-triggers synthetic bolding, so identical widths mean no variable font. The page reports the result
+stack and then measures what the visitor's browser actually resolved. The page reports the result
 in plain language, including the case where nothing animates because the visitor has no variable
-font. It does not claim a font is loaded when it is not. The page is 25108 bytes, one file, with
+font. It does not claim a font is loaded when it is not. The page is one file of about 28 KB with
 no network requests at all, which a browser test asserts by counting requests.
+
+**Chromium on Linux ignores `font-variation-settings` on fonts it gets from fontconfig.** This was
+found by measuring, not by reading, and it is worth writing down because it is the kind of thing
+that makes a demo page look broken for no visible reason. Measured on the Chromium in this
+workspace, with `Ubuntu Sans` resolved through the system font stack:
+
+```
+font-variation-settings widths [341.3125, 341.3125, 341.3125, 341.3125]
+font-weight/stretch widths     [327.75, 361.296875, 270.21875, 341.3125]
+```
+
+Four probes each, at `wght 100`, `wght 700`, `wdth 75` and `wdth 100`. Through
+`font-variation-settings` nothing moves at all. Through `font-weight` and `font-stretch` the same
+axes move, and at intermediate values such as 250 and 550 that are not named instances, so real
+interpolation is happening. The same font loaded by an `@font-face` rule does respond to
+`font-variation-settings`, which `test/browser.test.js` confirms separately against the harness
+page.
+
+So the docs page probes both, picks whichever works, and says which one it picked. When it falls
+back it rebuilds the identical timeline on `font-weight` and `font-stretch` and states on the page
+that the exported CSS and WAAPI objects still use `font-variation-settings`, which is the right
+thing for a font you ship yourself. The browser test asserts that the mode the page claims agrees
+with the widths the page measured, so the page cannot report a mode it did not actually verify.
 
 **Only one glyph run, one font, one text string per timeline.** There is no support for multiple
 fonts in one animation, no per-glyph axis targets, no reverse or alternate direction, and no

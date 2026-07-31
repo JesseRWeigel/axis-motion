@@ -9,13 +9,13 @@ const { easingToCss } = require('./easing');
 
 function num(v) {
   if (!Number.isFinite(v)) throw new RangeError(`cannot format ${v} as CSS number`);
-  const r = Math.round(v * 1e6) / 1e6;
-  return Number.isInteger(r) ? String(r) : String(r);
+  return String(Math.round(v * 1e6) / 1e6);
 }
 
 function offsetPct(offset) {
-  const p = Math.round(offset * 1e6) / 1e4;
-  return `${Number.isInteger(p) ? p : p}%`;
+  // 1e6 then 1e4 keeps four decimal places of a percentage without the
+  // float noise that (offset * 100) alone produces for values like 0.333.
+  return `${Math.round(offset * 1e6) / 1e4}%`;
 }
 
 /** `"wdth" 75, "wght" 100` with tags in sorted order. */
