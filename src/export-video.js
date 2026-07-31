@@ -131,4 +131,6 @@ async function exportVideo(plan, opts = {}) {
   return { out: path.resolve(o.out), frames, fps: o.fps, bytes, durationMs };
 }
 
-module.exports = { exportVideo, PLAYWRIGHT };
+// CANDIDATES rather than a single PLAYWRIGHT constant, so a caller can report every path that
+// was tried rather than only the one that happened to be hardcoded.
+module.exports = { exportVideo, CANDIDATES, loadChromium };
