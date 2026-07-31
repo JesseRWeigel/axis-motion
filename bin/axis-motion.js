@@ -44,16 +44,28 @@ async function main(argv) {
   }
   if (cmd === 'fonts') {
     const r = scanFonts();
-    const seen = new Set();
+    const aliases = new Map();
+    for (const v of r.variable) {
+      if (!aliases.has(v.realPath)) aliases.set(v.realPath, []);
+      if (v.isSymlink) aliases.get(v.realPath).push(v.file);
+    }
     process.stdout.write(`scanned ${r.scanned} font files\n`);
     for (const v of r.variable) {
+      if (v.isSymlink) continue; // listed under the file it points at
       const axes = v.axes.map((a) => `${a.tag}[${a.min}..${a.max}] def ${a.default}`).join('  ');
-      const dup = seen.has(v.realPath) ? '  (symlink to a file already listed)' : '';
-      seen.add(v.realPath);
-      process.stdout.write(`${v.file}\n    ${v.family || '(no family name)'}  ${axes}${dup}\n`);
+      const links = aliases.get(v.realPath) || [];
+      process.stdout.write(`${v.file}\n    ${v.family || '(no family name)'}  ${axes}\n`);
+      if (links.length) {
+        process.stdout.write(
+          `    ${links.length} symlink${links.length === 1 ? '' : 's'} point here: ` +
+            links.map((f) => path.basename(f)).join(', ') +
+            '\n'
+        );
+      }
     }
     process.stdout.write(
-      `${r.variable.length} files with fvar, ${seen.size} distinct, ${r.static} static, ${r.errors.length} unreadable\n`
+      `${r.variable.length} paths with fvar, ${aliases.size} distinct files, ` +
+        `${r.static} static, ${r.errors.length} unreadable\n`
     );
     return 0;
   }
