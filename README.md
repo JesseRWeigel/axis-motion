@@ -206,7 +206,7 @@ trimmed at the marked point for length; nothing else was edited.
 == environment
 v24.13.0
 ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
-repo: ~/Projects/thousand/projects/axis-motion
+repo: <repo>/axis-motion
 
 == no secrets and no home directory paths in tracked files
 scanned 32 tracked files, 186 KB
@@ -423,4 +423,4 @@ test/                  79 tests, node:test
 scripts/verify.sh      the whole thing
 ```
 
-MIT licensed. Part of the thousand catalog, task ART-026.
+MIT licensed. Part of the 722 things to build catalog, task ART-026.

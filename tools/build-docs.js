@@ -263,7 +263,7 @@ node bin/axis-motion.js video examples/wide-to-narrow.tl -o out/demo.mp4
 bash scripts/verify.sh</code></pre>
 
 <footer>
-  <p>Part of the thousand catalog, task ART-026. MIT licensed. No third party code, no network
+  <p>Part of the 722 things to build catalog, task ART-026. MIT licensed. No third party code, no network
   requests, no analytics. This page is a single self-contained file.</p>
 </footer>
 
