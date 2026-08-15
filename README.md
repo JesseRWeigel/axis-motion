@@ -3,6 +3,10 @@
 Animate OpenType variable font axes from a small timeline DSL, and export the result to CSS
 `@keyframes`, a Web Animations API object, and video.
 
+> Measurements described here were taken on one development machine: an RTX 5090 with
+> 32 GB of VRAM, 12 cores, 48 GB of RAM, running Linux under WSL2. Numbers from your own
+> hardware will differ.
+
 The part worth caring about is that it reads the font. A variable font declares its axes in the
 OpenType `fvar` table, with a tag, a minimum, a maximum and a default for each. `src/fvar.js`
 parses that table by hand, and the compiler refuses to emit an animation for an axis a font does
@@ -16,7 +20,7 @@ second runtime would have bought nothing.
 ## Axis inventory
 
 Every number below was read from the `fvar` table of the file named. `fc-list :variable` returns
-nothing on this machine, so `axis-motion fonts` walks the system font directories and checks each
+nothing on the development machine, so `axis-motion fonts` walks the system font directories and checks each
 file's table directory for `fvar` itself.
 
 ```
@@ -53,9 +57,9 @@ fourteen of them are symlinks. `Ubuntu-B.ttf` sounds like a static bold and is a
 `Ubuntu[wdth,wght].ttf`. A count that trusted filenames or `fc-list` output would be wrong by a
 factor of nearly three.
 
-**The only axis tags on this machine are `wght` and `wdth`.** There is no `opsz`, no `ital`, no
+**The only axis tags on the development machine are `wght` and `wdth`.** There is no `opsz`, no `ital`, no
 `slnt`, and no custom axis anywhere in this font set. The brief asked for custom axes, and the
-honest answer from the table is that this machine has none to demonstrate on. So the parser is
+honest answer from the table is that the development machine has none to demonstrate on. So the parser is
 tested two ways: against the real fonts above, and against a synthetic font built in memory by
 `test/fvar.test.js` carrying `GRAD` and `XPRT` axes, one hidden and one with a negative minimum.
 That test would fail immediately if the parser returned a fixed list of common tags.
@@ -216,7 +220,7 @@ no credential shaped strings, no /home/<user>/ paths, no NUL bytes
 32 tracked files, 186 KB total
 largest tracked file: docs/index.html
 
-== the axis inventory this machine really has
+== the axis inventory the development machine really has
 /usr/share/fonts/truetype/ubuntu/UbuntuSans-Italic[wdth,wght].ttf
     Ubuntu Sans  wdth[75..100] def 100  wght[100..800] def 400
 /usr/share/fonts/truetype/ubuntu/UbuntuSansMono-Italic[wght].ttf
@@ -259,7 +263,7 @@ docs/index.html matches a fresh build
       font-variation-settings widths [341.3125,341.3125,341.3125,341.3125]
       font-weight/stretch widths     [327.75,361.296875,270.21875,341.3125]
   ✔ the docs page animates for real, and its font report is true
-  ✔ the docs page axis table matches a fresh scan of this machine
+  ✔ the docs page axis table matches a fresh scan of the development machine
   ✔ no horizontal body overflow at 390px
   ✔ light and dark both render, and data-theme overrides both ways
   ✔ prefers-reduced-motion: no autoplay, and the play control still works
@@ -344,7 +348,7 @@ headless Chromium, seeks to each frame time, screenshots, and pipes the PNGs to 
 encoding. What that gives you is real variable font rendering by a real shaping and rasterisation
 engine. What it does not give you is an independent text rasteriser, so the video looks like
 Chromium because it is Chromium. If Chromium cannot be loaded the exporter raises rather than
-falling back. `test/video.test.js` asserts the `drawtext` claim against the ffmpeg on this machine
+falling back. `test/video.test.js` asserts the `drawtext` claim against the ffmpeg on the development machine
 by checking its filter help for any axis option, so if a future ffmpeg gains one this paragraph
 fails a test instead of quietly going stale.
 
@@ -395,7 +399,7 @@ and asserted in tests, and `axis-motion axes` prints the count, but you cannot y
 
 **The `avar` table is ignored.** Fonts with an axis variation table remap user coordinates
 non-linearly, so a value halfway between an axis minimum and maximum may not be halfway in design
-space. None of the fonts on this machine carries `avar`, so this has no effect here. It would
+space. None of the fonts on the development machine carries `avar`, so this has no effect here. It would
 matter on a font that does.
 
 **The CSS export assumes one span per glyph, in order.** It emits `:nth-child()` delay rules
