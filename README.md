@@ -3,6 +3,8 @@
 Animate OpenType variable font axes from a small timeline DSL, and export the result to CSS
 `@keyframes`, a Web Animations API object, and video.
 
+**[Watch the axes animate →](https://jesserweigel.github.io/axis-motion/)**
+
 > Measurements described here were taken on one development machine: an RTX 5090 with
 > 32 GB of VRAM, 12 cores, 48 GB of RAM, running Linux under WSL2. Numbers from your own
 > hardware will differ.
